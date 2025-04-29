@@ -1,0 +1,32 @@
+{
+  "name": "TTD Bot",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+
+  // Параметры запуска
+  "runArgs": ["--init", "--env-file", ".env", "--user", "1000:1000"],
+
+  // Пользователь внутри контейнера
+  "remoteUser": "appuser",
+
+  // Расширения для vscode
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-python.vscode-pylance", "ms-python.black-formatter"]
+    },
+    "settings": {
+      "python.defaultInterpreterPath": "/usr/local/bin/python",
+      "python.languageServer": "Pylance",
+      "python.formatting.provider": "black"
+    }
+  },
+
+  // Команды для установки зависимостей
+  "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+
+  // Монтрирование рабочей попки
+  "workspaceFolder": "/home/appuser/app",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/appuser/app,type=bind,consistency=cached"
+}

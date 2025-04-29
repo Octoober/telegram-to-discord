@@ -1,8 +1,12 @@
-__pycache__/
 *.py[cod]
-*$py.class
+*.log
 
+__pycache__/
 .vscode/
 .venv/
+temp/
+tem/
+logs/
+
 
 *.env
