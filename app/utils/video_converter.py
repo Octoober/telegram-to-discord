@@ -44,12 +44,7 @@ async def convert_mp4_to_gif(file_data: bytes) -> bytes:
             logger.debug(f"Preparing output gif path: {output_path}")
 
         def _convert():
-            """
-            ffmpeg -i input.mp4 -vf "fps=10,scale=320:-1:flags=lanczos" -c:v pam \
-                -f image2pipe - | \
-                convert -delay 10 - -loop 0 -layers optimize output.gif
-            """
-            # Формируем команду FFmpeg
+            """Конвертирует mp4 в gif с помощью FFmpeg."""
             cmd = [
                 "ffmpeg",
                 "-y",  # Перезапись без подтверждения

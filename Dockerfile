@@ -26,6 +26,4 @@ COPY --chown=appuser:appuser . .
 
 ENV PYTHONPATH="${PYTHONPATH}:/home/appuser/app"
 
-ENV PYTHONPATH="${PYTHONPATH}:/app"
-
 CMD ["python", "-u", "app/main.py"]
