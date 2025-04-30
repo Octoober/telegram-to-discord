@@ -34,9 +34,10 @@ class DiscordService:
                 logger.info(f"Sending message to Discord")
                 self.webhook.send(
                     content=content,
-                    username=self.settings.DISCORD_USERNAME,
+                    # username=self.settings.DISCORD_USERNAME,
                     files=files,
                     wait=True,
+                    suppress_embeds=True,
                 )
                 logger.info("Message sent to Discord")
 

@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import List, Tuple
 
 
-from telegram import Update
+from telegram import Update, MessageOriginChannel
 from telegram.ext import ContextTypes
 from discord import File
 
@@ -113,10 +113,35 @@ class TelegramMediaHandler:
             Tuple[str, List[File]]: Кортеж с текстом сообщения и списком файлов
         """
         logger.info("Processing message")
-        content = message.caption or ""
+        content = message.caption or message.text or ""
         files = []
+        forward_info = []
+        forward_postfix = "💬  "
 
         # TODO: Разбить на стратегии
+
+        if message.forward_origin:
+            logger.info("Forwarded message found")
+            origin = message.forward_origin
+            if isinstance(origin, MessageOriginChannel):
+                channel = origin.chat
+
+                if channel.username:
+
+                    name = f"{channel.title}" if channel.title else "Unknown Channel"
+                    link = f"https://t.me/{channel.username}/{origin.message_id}"
+                    channel_link = f"[{name}]({link})"
+                    forward_info.append(f"{forward_postfix}{channel_link}")
+                else:
+                    forward_info.append(f"{forward_postfix}{origin.chat.title}")
+
+            if forward_info:
+                forward_text = "\n".join(forward_info)
+                if content:
+                    content = f"{forward_text}\n\n{content}"
+                else:
+                    content = forward_text
+
         if message.photo:
             logger.info("Photo found")
             file_id = message.photo[-1].file_id
