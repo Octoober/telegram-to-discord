@@ -34,7 +34,6 @@ class DiscordService:
                 logger.info(f"Sending message to Discord")
                 self.webhook.send(
                     content=content,
-                    # username=self.settings.DISCORD_USERNAME,
                     files=files,
                     wait=True,
                     suppress_embeds=True,
@@ -44,8 +43,3 @@ class DiscordService:
         except Exception as e:
             logger.error(f"Error sending message to Discord: {e}")
             raise e
-        except HTTPException as e:
-            if e.statis == 413:
-                logger.error(
-                    "File too large to send. Please reduce the file size and try again."
-                )
