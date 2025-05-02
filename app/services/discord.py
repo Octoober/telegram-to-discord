@@ -15,9 +15,12 @@ class DiscordService:
 
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.webhook = SyncWebhook.from_url(self.settings.DISCORD_WEBHOOK_URL)
+        self._hooks = [
+            (SyncWebhook.from_url(hook.url), hook.silent)
+            for hook in self.settings.DISCORD_WEBHOOKS
+        ]
 
-    async def send(self, content: str, files: list[File]) -> None:
+    async def send(self, content: str = "", files: list[File] = None) -> None:
         """Отправляет сообщение в Discord
 
         Args:
@@ -29,17 +32,21 @@ class DiscordService:
             Exception: Любая другая ошибка
         """
 
-        try:
-            if content or files:
-                logger.info(f"Sending message to Discord")
-                self.webhook.send(
+        if not content and not files:
+            logger.warning("No content or files to send to Discord")
+            return
+
+        for webhook, silent in self._hooks:
+            try:
+                logger.info(f"Sending message to Discord webhook: {webhook.url}")
+                webhook.send(
                     content=content,
-                    files=files,
+                    files=files or [],
                     wait=True,
                     suppress_embeds=True,
+                    silent=silent,
                 )
-                logger.info("Message sent to Discord")
-
-        except Exception as e:
-            logger.error(f"Error sending message to Discord: {e}")
-            raise e
+                logger.info(f"Message sent to Discord webhook: {webhook.url}")
+            except Exception as e:
+                logger.error(f"Error sending message to Discord webhook: {webhook.url}")
+                raise

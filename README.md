@@ -5,6 +5,8 @@ python -m app.main
 
 Либо через Docker
 ```
-docker build -t <image_name>
-docker run --env-file .env <image_name>
+docker build -t <IMAGENAME>
+docker run -v \ 
+  "$(pwd)/settings.json:/home/appuser/app/settings.json:ro" \
+  <IMAGENAME>
 ```

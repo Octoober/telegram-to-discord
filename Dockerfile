@@ -21,8 +21,9 @@ WORKDIR /home/appuser/app
 COPY --chown=appuser:appuser requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# COPY --chown=appuser:appuser settings.json ./
 # Копирование исходного кода
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser . ./
 
 ENV PYTHONPATH="${PYTHONPATH}:/home/appuser/app"
 

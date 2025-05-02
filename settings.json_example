@@ -1,0 +1,16 @@
+{
+  "telegram_bot_token": "",
+  "discord_webhooks": [
+    {
+      "url": "https://discordapp.com/api/webhooks/",
+      "silent": false
+    },
+    {
+      "url": "https://discord.com/api/webhooks/",
+      "silent": true
+    }
+  ],
+  "temp_path": "temp",
+  "discord_max_file_size": 8388608,
+  "telegram_max_file_size": 20971520
+}

@@ -1,37 +1,48 @@
-from pydantic import Field, DirectoryPath
+import json
+from pydantic import Field, DirectoryPath, BaseModel
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 
 
-class Settings(BaseSettings):
+class WebhookConfig(BaseModel):
+    """Конфигурация вебхука Discord"""
+
+    url: str = Field(..., description="Webhook URL")
+    silent: bool = Field(False, description="Silent mode")
+
+
+class Settings(BaseModel):
     """
     Настройки приложения
     """
 
-    TELEGRAM_BOT_TOKEN: str = Field(..., env="TELEGRAM_TOKEN")
-    TEMP_PATH: Path = Field(
-        default=Path("temp"), description="Path to temporary files", env="TEMP_PATH"
+    TELEGRAM_BOT_TOKEN: str = Field(
+        ..., alias="telegram_bot_token", description="Telegram bot token"
     )
-    DISCORD_WEBHOOK_URL: str = Field(..., env="DISCORD_WEBHOOK_URL")
-    DISCORD_USERNAME: str = Field(
-        default="TTD Bot",
-        description="Username for Discord webhook",
-        env="DISCORD_USERNAME",
+    TEMP_PATH: DirectoryPath = Field(
+        Path("temp"), alias="temp_path", description="Path to temporary files"
+    )
+    DISCORD_WEBHOOKS: List[WebhookConfig] = Field(
+        ..., alias="discord_webhooks", description="Discord webhooks"
     )
     DISCORD_MAX_FILE_SIZE: int = Field(
-        ..., description="Max file size for discord", env="DISCORD_MAX_FILE_SIZE"
+        ..., alias="discord_max_file_size", description="Max file size for discord"
     )
     TELEGRAM_MAX_FILE_SIZE: int = Field(
-        default=20 * 1024 * 1024,
+        ...,
+        alias="telegram_max_file_size",
         description="Max file size for Telegram",
-        env="TELEGRAM_MAX_FILE_SIZE",
     )
 
     class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+        settings_file = "settings.json"
+        settings_file_encoding = "utf-8"
         case_sensitive = False
+        populate_by_name = True
+
+
+_settings: Optional[Settings] = None
 
 
 def get_settings() -> Settings:
@@ -42,9 +53,13 @@ def get_settings() -> Settings:
     """
     global _settings
     if not _settings:
-        _settings = Settings()
+        config_path = Path(Settings.Config.settings_file)
+        if not config_path.exists():
+            raise FileNotFoundError(f"Settings file {config_path} not found.")
+
+        data = json.loads(
+            config_path.read_text(encoding=Settings.Config.settings_file_encoding)
+        )
+        _settings = Settings(**data)
         _settings.TEMP_PATH.mkdir(parents=True, exist_ok=True)
     return _settings
-
-
-_settings: Optional[Settings] = None

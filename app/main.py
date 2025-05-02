@@ -3,6 +3,8 @@ from telegram.ext import (
     filters,
     MessageHandler,
 )
+import os
+
 
 from app.utils.logging import setup_logget, get_logger
 
@@ -22,6 +24,8 @@ def main() -> None:
     logger = get_logger(__name__)
 
     logger.info("Starting bot...")
+    logger.info(f"PID: {os.getpid()}")
+
     telegram_service = TelegramService()
     application = telegram_service.app
 
