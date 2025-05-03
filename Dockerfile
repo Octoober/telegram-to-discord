@@ -11,7 +11,7 @@ RUN addgroup -S appuser && \
 # Создание рабочих директорий
 RUN mkdir -p \
     /home/appuser/app/logs \
-    /temp \
+    /temp && \
     chown -R appuser:appuser /home/appuser /temp /logs
 
 USER appuser
