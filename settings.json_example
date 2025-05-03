@@ -1,16 +1,28 @@
 {
-  "telegram_bot_token": "",
-  "discord_webhooks": [
-    {
-      "url": "https://discordapp.com/api/webhooks/",
-      "silent": false
-    },
-    {
-      "url": "https://discord.com/api/webhooks/",
-      "silent": true
+  "telegram": {
+    "admin_ids": [],
+    "bot_token": "",
+    "max_file_size": 20971520
+  },
+  "discord": {
+    "webhooks": [
+      {
+        "name": "Main Channel",
+        "url": "",
+        "silent": false
+      },
+      {
+        "name": "Chat",
+        "url": "",
+        "silent": true
+      }
+    ],
+    "max_file_size": 8388608,
+    "message": {
+      "forward_postfix": "Forward from Telegram: "
     }
-  ],
-  "temp_path": "temp",
-  "discord_max_file_size": 8388608,
-  "telegram_max_file_size": 20971520
+  },
+  "general": {
+    "temp_path": "temp"
+  }
 }
