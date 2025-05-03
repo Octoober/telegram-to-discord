@@ -9,9 +9,7 @@ RUN addgroup -S appuser && \
 
 
 # Создание рабочих директорий
-RUN mkdir -p \
-    /home/appuser/app/logs \
-    /temp && \
+RUN mkdir -p /app /temp /logs && \
     chown -R appuser:appuser /home/appuser /temp /logs
 
 USER appuser
@@ -23,9 +21,8 @@ WORKDIR /home/appuser/app
 COPY --chown=appuser:appuser requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# COPY --chown=appuser:appuser settings.json ./
 # Копирование исходного кода
-COPY --chown=appuser:appuser . ./
+COPY --chown=appuser:appuser . .
 
 ENV PYTHONPATH="${PYTHONPATH}:/home/appuser/app"
 
