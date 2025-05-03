@@ -1,11 +1,12 @@
-from discord import File, SyncWebhook
+from io import BytesIO
+from typing import List, Optional
+
+from discord import File as DiscordFile, SyncWebhook
 from discord.errors import HTTPException
+
 from app.config import get_settings
-
 from app.utils.logging import get_logger
-
-
-logger = get_logger(__name__)
+from app.models.file_payload import FilePayload
 
 
 class DiscordService:
@@ -15,30 +16,50 @@ class DiscordService:
 
     def __init__(self) -> None:
         self.settings = get_settings()
+        self.logger = get_logger(__name__)
         self._hooks = [
             (SyncWebhook.from_url(hook.url), hook.silent)
-            for hook in self.settings.DISCORD_WEBHOOKS
+            for hook in self.settings.discord.webhooks
         ]
 
-    async def send(self, content: str = "", files: list[File] = None) -> None:
+    async def send(self, content: str = "", payloads: List[FilePayload] = None) -> None:
         """Отправляет сообщение в Discord
 
         Args:
             content (str): Текст сообщения
-            files (list[File]): Список файлов для отправки
+            payloads (List[FilePayload]): Список файлов для отправки
 
         Raises:
-            HTTPException: Ошибка при отправке сообщения в Discord
-            Exception: Любая другая ошибка
+            Exception: Любая ошибка
         """
 
-        if not content and not files:
-            logger.warning("No content or files to send to Discord")
+        if not content and not payloads:
+            self.logger.warning("No content or files to send to Discord")
             return
 
         for webhook, silent in self._hooks:
+            files: List[DiscordFile] = []
+            for file_payload in payloads or []:
+                size = len(file_payload.data)
+                if size > self.settings.discord.max_file_size:
+                    self.logger.warning(
+                        f"File {file_payload.filename} is too large: {size} bytes."
+                    )
+                    continue
+
+                stream = BytesIO(file_payload.data)
+                files.append(
+                    DiscordFile(
+                        fp=stream,
+                        filename=file_payload.filename,
+                    )
+                )
+
+            if not content and not files:
+                continue
+
             try:
-                logger.info(f"Sending message to Discord webhook: {webhook.url}")
+                self.logger.info(f"Sending message to Discord webhook: {webhook.url}")
                 webhook.send(
                     content=content,
                     files=files or [],
@@ -46,7 +67,9 @@ class DiscordService:
                     suppress_embeds=True,
                     silent=silent,
                 )
-                logger.info(f"Message sent to Discord webhook: {webhook.url}")
+                self.logger.info(f"Message sent to Discord webhook: {webhook.url}")
             except Exception as e:
-                logger.error(f"Error sending message to Discord webhook: {webhook.url}")
+                self.logger.error(
+                    f"Error sending message to Discord webhook: {webhook.url}"
+                )
                 raise

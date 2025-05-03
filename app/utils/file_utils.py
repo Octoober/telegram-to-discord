@@ -24,16 +24,16 @@ async def download_media(file_id: str, bot) -> bytes:
     try:
         tg_file = await bot.get_file(file_id)
         file_size = tg_file.file_size
-        if file_size > settings.TELEGRAM_MAX_FILE_SIZE:
+        if file_size > settings.telegram.max_file_size:
             logger.error(f"File {file_id} is too large: {file_size} bytes.")
-            raise FileTooLargeError(file_id, file_size, settings.TELEGRAM_MAX_FILE_SIZE)
+            raise FileTooLargeError(file_id, file_size, settings.telegram.max_file_size)
 
         logger.info(
             "Downloading...",
             extra={
                 "file_id": file_id,
                 "file_size": file_size,
-                "max_size": settings.TELEGRAM_MAX_FILE_SIZE,
+                "max_size": settings.telegram.max_file_size,
             },
         )
         file_bytes = await tg_file.download_as_bytearray()
@@ -43,10 +43,10 @@ async def download_media(file_id: str, bot) -> bytes:
         if "File is too big" in str(e):
             logger.error(
                 "Telegram API file size limit exceeded.",
-                extra={"file_id": file_id, "max_size": settings.TELEGRAM_MAX_FILE_SIZE},
+                extra={"file_id": file_id, "max_size": settings.telegram.max_file_size},
             )
             raise FileTooLargeError(
-                file_id, 0, settings.TELEGRAM_MAX_FILE_SIZE
+                file_id, 0, settings.telegram.max_file_size
             ) from None
         logger.error("Telegram API error", extra={"file_id": file_id, "error": str(e)})
         raise MediaDownloadError(file_id, "Telegram API request error")

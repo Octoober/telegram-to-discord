@@ -1,29 +1,35 @@
 import io
 import asyncio
 from collections import defaultdict
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 
-from telegram import Update, MessageOriginChannel
+from telegram import Update, Message, MessageOriginChannel, MessageOriginUser
 from telegram.ext import ContextTypes
 from discord import File
 
 from app.services.discord import DiscordService
-from app.utils.file_utils import download_media
-from app.utils.video_converter import convert_mp4_to_gif
+from app.services.media_service import MediaService
+from app.models.media_group import MediaGroup
 from app.utils.logging import get_logger
-from app.config import get_settings
 
-
-logger = get_logger(__name__)
+from app.config import get_settings, Settings
 
 
 class TelegramMediaHandler:
-    def __init__(self):
-        self.media_groups = defaultdict(list)
+    def __init__(
+        self,
+        media_service: MediaService,
+        discord_service: DiscordService,
+        settings: Settings,
+    ) -> None:
+        self.media_groups: dict[str, MediaGroup] = {}
+        self.media_service = media_service
+        self.discord = discord_service
+        self.settings = settings
+
         self.lock = asyncio.Lock()
-        self.discord = DiscordService()
-        self.settings = get_settings()
+        self.logger = get_logger(__name__)
 
     async def handle_message(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -34,30 +40,27 @@ class TelegramMediaHandler:
             update (Update): Обновление от Telegram
             context (ContextTypes.DEFAULT_TYPE): Контекст обновления
         """
-        message = update.effective_message
+        msg: Message = update.effective_message
         try:
-            if message.media_group_id:
-                await self._handle_media_group(message, context)
+            if msg.media_group_id:
+                self.logger.info("Processing media group")
+                await self._handle_media_group(msg, context)
             else:
-                await self.handle_single(message, context)
+                self.logger.info("Processing single message")
+                await self._process_and_send([msg], context)
         except Exception as e:
-            raise e
-
-    async def handle_single(
-        self, message: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """Обработка одиночного сообщения
-
-        Args:
-            message (Update): Сообщение от Telegram
-            context (ContextTypes.DEFAULT_TYPE): Контекст обновления
-
-        """
-        content, files = await self._process_message(message, context)
-        await self.discord.send(content, files)
+            self.logger.error(
+                f"Error processing message: {e}",
+                extra={
+                    "message_id": msg.message_id,
+                    "chat_id": msg.chat.id,
+                    "user_id": msg.from_user.id if msg.from_user else None,
+                },
+            )
+            raise
 
     async def _handle_media_group(
-        self, message: Update, context: ContextTypes.DEFAULT_TYPE
+        self, msg: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """Обработка группы медиа сообщений
 
@@ -67,113 +70,80 @@ class TelegramMediaHandler:
 
         """
         async with self.lock:
-            media_group_id = message.media_group_id
-            if media_group_id not in [
-                m.message_id for m in self.media_groups[media_group_id]
-            ]:
-                self.media_groups[media_group_id].append(message)
+            group_id = msg.media_group_id
+            group = self.media_groups.setdefault(group_id, MediaGroup())
+            if msg.message_id in group.ids:
+                return
+            group.messages.append(msg)
+            group.ids.add(msg.message_id)
+            if len(group.messages) == 1:
+                asyncio.create_task(self._schedule_flush(group_id, context))
 
-            if len(self.media_groups[media_group_id]) == 1:
-                asyncio.create_task(self._process_media_group(media_group_id, context))
-
-    async def _process_media_group(
-        self, media_group_id, context: ContextTypes.DEFAULT_TYPE
+    async def _schedule_flush(
+        self, group_id: str, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        """Обработка группы медиа сообщений
+        """Запланировать отправку группы медиа
 
         Args:
-            media_group_id (str): ID группы медиа сообщений
+            group_id (str): ID группы медиа
             context (ContextTypes.DEFAULT_TYPE): Контекст обновления
-
         """
         await asyncio.sleep(5)
-
         async with self.lock:
-            messages = self.media_groups.pop(media_group_id, [])
+            group = self.media_groups.pop(group_id, [])
 
-        content = ""
-        files = []
+        if group:
+            await self._process_and_send(group.messages, context)
+
+    def _compose_forward_text(self, msg: Message) -> Optional[str]:
+        origin = msg.forward_origin
+        if not origin:
+            return None
+
+        postfix = self.settings.discord.message.forward_postfix
+
+        # Репост из канала
+        if isinstance(origin, MessageOriginChannel):
+            channel = origin.chat
+            name = channel.title or channel.username or "Unknown Channel"
+
+            if channel.username:
+                # Если есть username, то используем его
+                link = f"https://t.me/{channel.username}/{origin.message_id}"
+                return f"{postfix}[{name}]({link})"
+            else:
+                # Если нет username, то используем ID
+                return f"{postfix}{name}"
+
+        # Репост от пользователя
+        if isinstance(origin, MessageOriginUser):
+            user = origin.sender_user
+            name = user.first_name or "Unknown User"
+            if user.link:
+                # Если есть username, то используем его с ссылкой
+                return f"{postfix}[{name}]({user.link})"
+
+            # Если нет username, то используем только имя
+            return f"{postfix}{name}"
+
+        # Какой-то редкий случай
+        return None
+
+    async def _process_and_send(
+        self, messages: List[Message], context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Обработка и отправка сообщений"""
+
+        first_msg: Message = messages[0]
+        forward = self._compose_forward_text(first_msg)
+        content = (first_msg.caption or first_msg.text or "").strip()
+
+        if forward:
+            content = f"{forward}\n\n{content}"
+
+        payloads = []
         for msg in messages:
-            caption, new_files = await self._process_message(msg, context)
-            content = caption or content
-            files.extend(new_files)
+            payloads.extend(await self.media_service.build_payloads(msg, context))
 
-        if files:
-            await self.discord.send(content, files)
-
-    async def _process_message(
-        self, message: str, context: ContextTypes.DEFAULT_TYPE
-    ) -> Tuple[str, List[File]]:
-        """Обработка сообщения
-
-        Args:
-            message (str): Сообщение от Telegram
-            context (ContextTypes.DEFAULT_TYPE): Контекст обновления
-        Returns:
-            Tuple[str, List[File]]: Кортеж с текстом сообщения и списком файлов
-        """
-        logger.info("Processing message")
-        content = message.caption or message.text or ""
-        files = []
-        forward_info = []
-        forward_postfix = "💬  "
-
-        # TODO: Разбить на стратегии
-
-        if message.forward_origin:
-            logger.info("Forwarded message found")
-            origin = message.forward_origin
-            if isinstance(origin, MessageOriginChannel):
-                channel = origin.chat
-
-                if channel.username:
-
-                    name = f"{channel.title}" if channel.title else "Unknown Channel"
-                    link = f"https://t.me/{channel.username}/{origin.message_id}"
-                    channel_link = f"[{name}]({link})"
-                    forward_info.append(f"{forward_postfix}{channel_link}")
-                else:
-                    forward_info.append(f"{forward_postfix}{origin.chat.title}")
-
-            if forward_info:
-                forward_text = "\n".join(forward_info)
-                if content:
-                    content = f"{forward_text}\n\n{content}"
-                else:
-                    content = forward_text
-
-        if message.photo:
-            logger.info("Photo found")
-            file_id = message.photo[-1].file_id
-            file_data = await download_media(file_id, context.bot)
-            files.append(
-                File(
-                    io.BytesIO(file_data),
-                    filename=f"nya.jpg",
-                )
-            )
-
-        if message.animation:
-            logger.info("Animation found")
-            file_id = message.animation.file_id
-            file_data = await download_media(file_id, context.bot)
-            gif_data = await convert_mp4_to_gif(file_data)
-            files.append(
-                File(
-                    io.BytesIO(gif_data),
-                    filename=f"nya.gif",
-                )
-            )
-
-        if message.video:
-            logger.info("Video found")
-            file_id = message.video.file_id
-            file_data = await download_media(file_id, context.bot)
-            files.append(
-                File(
-                    io.BytesIO(file_data),
-                    filename=f"nya.mp4",
-                )
-            )
-
-        return content, files
+        self.logger.info("Sending to Discord", extra={"payloads": payloads})
+        await self.discord.send(content, payloads)

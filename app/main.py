@@ -6,11 +6,14 @@ from telegram.ext import (
 import os
 
 
-from app.utils.logging import setup_logget, get_logger
-
 from app.services.telegram import TelegramService
 from app.handlers.telegram.commands import test
 from app.handlers.telegram_media_handler import TelegramMediaHandler
+
+from app.utils.logging import setup_logget, get_logger
+from app.services.media_service import MediaService
+from app.services.discord import DiscordService
+from app.config import get_settings
 
 
 def main() -> None:
@@ -32,7 +35,11 @@ def main() -> None:
     application.add_handler(CommandHandler("test", test.test))
 
     # Инициализация обработчика медиа
-    media_handler = TelegramMediaHandler()
+    media_handler = TelegramMediaHandler(
+        media_service=MediaService(),
+        discord_service=DiscordService(),
+        settings=get_settings(),
+    )
 
     # следить только за постами на канале
     application.add_handler(

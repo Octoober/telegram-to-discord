@@ -16,7 +16,7 @@ class TelegramService:
         if self._app is None:
             self._app = (
                 ApplicationBuilder()
-                .token(self.settings.TELEGRAM_BOT_TOKEN)
+                .token(self.settings.telegram.bot_token)
                 .post_init(self.on_startup)
                 .build()
             )

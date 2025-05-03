@@ -22,7 +22,7 @@ async def convert_mp4_to_gif(file_data: bytes) -> bytes:
     """
 
     settings = get_settings()
-    temp_dir = Path(settings.TEMP_PATH)
+    temp_dir = Path(settings.general.temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     input_path: Optional[Path] = None
